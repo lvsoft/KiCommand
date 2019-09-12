@@ -1,16 +1,17 @@
 import collections
 from collections import defaultdict, Counter
-from itertools import compress,izip, cycle
+from itertools import compress, cycle
 import itertools
 import pcbnew
 import time
 import os, sys
+import traceback
 import math
 import re
 from textwrap import wrap
 import wx
-from wxpointutil import wxPointUtil
-import kicommand_gui
+from .wxpointutil import wxPointUtil
+from . import kicommand_gui
 
 _dictionary = {'user':{}, 'persist':{}, 'command':{}}
 # collections.OrderedDict
@@ -193,7 +194,7 @@ def SHOWPARAM(values,keys):
     return _user_stacks['drawparams']
     
 def PARAM(values,keys):
-    if isinstance(values,basestring):
+    if isinstance(values, str):
         values = values.split(',')
     keys = keys.split(',')
     
@@ -231,8 +232,8 @@ class gui(kicommand_gui.kicommand_panel):
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
             #print(exc_type, fname, exc_tb.tb_lineno)  
             output(str(e))
-            wx.MessageDialog(self.GetParent(),"Error 1 on line %s: %s"%
-               (exc_tb.tb_lineno,str(e))).ShowModal()
+            wx.MessageDialog(self.GetParent(),"Error 1 on line %s: %s\n%s"%
+               (exc_tb.tb_lineno, str(e), traceback.format_exc())).ShowModal()
 
 class aplugin(pcbnew.ActionPlugin):
     """implements ActionPlugin"""
@@ -242,10 +243,8 @@ class aplugin(pcbnew.ActionPlugin):
         self.category = "Command"
         self.description = "Select, modify and interrogate pcbnew objects with a simple command script."
     def Run(self):
-        parent =      \
-            filter(lambda w: w.GetTitle().startswith('Pcbnew'), 
-                   wx.GetTopLevelWindows()
-            )[0]
+        parent = [x for x in wx.GetTopLevelWindows() if x.GetTitle().startswith('Pcbnew')][0]
+
         aplugin.g=gui(parent)
         pane = wx.aui.AuiPaneInfo()                       \
          .Caption( u"KiCommand" )                   \
@@ -367,7 +366,7 @@ def run(commandstring,returnval=0):
             elif isinstance(commandToExecute,UserCommand):
                 #output('%s is UserCommand'%command)
                 run(' '.join(commandToExecute.execute))
-            elif isinstance(commandToExecute,basestring):
+            elif isinstance(commandToExecute,str):
                 #output('%s is commandstring'%command)
                 run(commandToExecute)
             found = True
@@ -426,41 +425,41 @@ def output(*args):
     return
     # Here's the simple 'print' definition of output
     for arg in args:
-        print arg,
-    print
+        print ( arg,)
+    print()
 
 def tosegments(*c):
-    tracklist,layer = c
-    #print 'tracklist: ',tracklist
+    tracklist, layer = c
+    # print('tracklist: ',tracklist)
     try:
         layerID = int(layer)
     except:
         layerID = _user_stacks['Board'][-1].GetLayerID(str(layer))
         
     segments = []
-    for tlist in tracklist:
-        for t in tlist:
-            # s=t.GetStart()
-            # e=t.GetEnd()
-            s,e = get_ds_ends(t)
-            
-            try:
-                width = t.GetWidth()
-            except:
-                width = _user_stacks['drawparams']['t']
-            if not isinstance(s,pcbnew.wxPoint):
-                s = pcbnew.wxPoint(*s)
-            if not isinstance(e,pcbnew.wxPoint):
-                e = pcbnew.wxPoint(*e)
-            segments.append(draw_segmentwx(
-                s,
-                e,
-                layer=layerID,
-                thickness=width))
+    for t in tracklist:
+        #for t in tlist:
+        # s=t.GetStart()
+        # e=t.GetEnd()
+        s,e = get_ds_ends(t)
+
+        try:
+            width = t.GetWidth()
+        except:
+            width = _user_stacks['drawparams']['t']
+        if not isinstance(s,pcbnew.wxPoint):
+            s = pcbnew.wxPoint(*s)
+        if not isinstance(e,pcbnew.wxPoint):
+            e = pcbnew.wxPoint(*e)
+        segments.append(draw_segmentwx(
+            s,
+            e,
+            layer=layerID,
+            thickness=width))
     return segments
         
 
-def draw_segmentlist(input,layer=pcbnew.Eco2_User,thickness=0.015*pcbnew.IU_PER_MM):
+def draw_segmentlist(input, layer=pcbnew.Eco2_User, thickness=0.015*pcbnew.IU_PER_MM):
     """Draws the vector (wxPoint_vector of polygon vertices) on the given
        layer and with the given thickness.
        close indicates whether the polygon needs to be closed
@@ -485,7 +484,8 @@ def draw_segmentlist(input,layer=pcbnew.Eco2_User,thickness=0.015*pcbnew.IU_PER_
     except:
         layer = _user_stacks['Board'][-1].GetLayerID(str(layer))
 
-    if isinstance(input,basestring):
+    print('input:', input)
+    if isinstance(input,str):
         #input = [input.split(',')]
         return drawlistofpolylines([input],layer,thickness)
         
@@ -496,7 +496,7 @@ def draw_segmentlist(input,layer=pcbnew.Eco2_User,thickness=0.015*pcbnew.IU_PER_
         input = [input]
         #print '478 triggered',input
         
-    return drawlistofpolylines(input,layer,thickness)
+    return drawlistofpolylines(input, layer, thickness)
     
     # Here, input must be an iterable
     if not hasattr(input,'__iter__'):
@@ -509,7 +509,7 @@ def draw_segmentlist(input,layer=pcbnew.Eco2_User,thickness=0.015*pcbnew.IU_PER_
     return drawlistofpolylines(input,layer,thickness)
     # Now, input is an actual list (of strings, or as it was passed to this function)
     # convert a list of strings (possibly comma separated) into a list of floats
-    if isinstance(input[0],basestring):
+    if isinstance(input[0],str):
         temp = []
         input = map(lambda y: floatnoerror(y),map(lambda x: temp.extend(x),[i.split(',') for i in input]))
     # Now, input is a list of
@@ -521,7 +521,7 @@ def draw_segmentlist(input,layer=pcbnew.Eco2_User,thickness=0.015*pcbnew.IU_PER_
     if not hasattr(input[0],'__iter__') and not isinstance(input[0],pcbnew.wxPoint):
     #if isinstance(input[0],float):
         a = iter(input)
-        input = [izip(a, a)]
+        input = [zip(a, a)]
     
     if isinstance(input[0],pcbnew.wxPoint):
         input = [input]
@@ -544,7 +544,7 @@ def draw_segmentlist(input,layer=pcbnew.Eco2_User,thickness=0.015*pcbnew.IU_PER_
         #for segment in shape:
         if isinstance(shape[0],(float,int)):
             a = iter(shape)
-            shape = [pcbnew.wxPoint(int(x),int(y)) for x,y in izip(a, a)]
+            shape = [pcbnew.wxPoint(int(x),int(y)) for x,y in zip(a, a)]
         for i in range(len(shape)-1):
             segments.append(draw_segmentwx(
                 shape[i],
@@ -568,14 +568,14 @@ def drawlistofpolylines(input_lop,layer,thickness):
         # 2) or a list of wxPoint, or a list of __getitem__ objects with two values
         #    in which case each list value is an x/y pair.
         numbers = shape
-        if isinstance(numbers,basestring):
+        if isinstance(numbers,str):
             output('string2')
-            numbers = map(lambda x: float(x),shape.split(','))
+            numbers = [float(x) for x in shape.split(',')]
         
         if not hasattr(numbers[0],'__getitem__'):
             #print 'zip triggered'
             a=iter(numbers)
-            numbers = [(intnoerror(x),intnoerror(y)) for x,y in izip(a, a)]
+            numbers = [(intnoerror(x),intnoerror(y)) for x,y in zip(a, a)]
         for i in range(len(numbers)-1):
             s = numbers[i]
             e = numbers[i+1]
@@ -1540,14 +1540,14 @@ def point_round128(w):
     return w.__class__(int(w[0])&mask,int(w[1])&mask)
 
     # TODO: maybe add layer, CPolyLine, and priority to drawparams
-def newzone(points, netname, layer, CPolyLine=pcbnew.CPolyLine.NO_HATCH, priority=0):
+def newzone(points, netname, layer, CPolyLine=pcbnew.ZONE_CONTAINER.NO_HATCH, priority=0):
     """NOT IMPLEMENTED"""
     # CPolyLine values: NO_HATCH, DIAGONAL_FULL, DIAGONAL_EDGE
     
     priority = int(priority)
 
-    if isinstance(CPolyLine,basestring):
-        CPolyLine = getattr(pcbnew.CPolyLine,CPolyLine)
+    if isinstance(CPolyLine,str):
+        CPolyLine = getattr(pcbnew.ZONE_CONTAINER, CPolyLine)
         
     try:
         layer = int(layer)
@@ -1582,7 +1582,7 @@ def newzone(points, netname, layer, CPolyLine=pcbnew.CPolyLine.NO_HATCH, priorit
     # before then, the zone boundary will just be a line.
     # Omit this if you are using pcbnew.CPolyLine.NO_HATCH
     #pcbnew.CPolyLine. (DIAGONAL_EDGE, DIAGONAL_FULL, NO_HATCH)
-    if CPolyLine != pcbnew.CPolyLine.NO_HATCH:
+    if CPolyLine != pcbnew.ZONE_CONTAINER.NO_HATCH:
         newarea.Hatch()
         
 def SETLENGTH(initlist, length):
@@ -1767,7 +1767,7 @@ def CUT():
     #cutter.DeleteStructure()
     return None
 def DRAWPARAMS(dims,layer):
-    t,w,h = dims.split(',') if isinstance(dims,basestring) else dims \
+    t,w,h = dims.split(',') if isinstance(dims,str) else dims \
     if hasattr(dims,'__iter__') else [dims]
 
     try:
@@ -1779,12 +1779,12 @@ def DRAWPARAMS(dims,layer):
 
 def list_to_paired_list(input):
     a = iter(input)
-    input = [pcbnew.wxPoint(int(x),int(y)) for x,y in izip(a, a)]
+    input = [pcbnew.wxPoint(int(x),int(y)) for x,y in zip(a, a)]
     return input
 
 def convert_to_points(input):
     #output( 'ctp1: ',input
-    if isinstance(input,basestring):
+    if isinstance(input,str):
         input = map(lambda x: float(x),input.split(','))
     
     if (not hasattr(input,'__iter__')) :
@@ -1797,7 +1797,7 @@ def convert_to_points(input):
     # input is now a list of list(s). It could be either
     # list of strings, numbers, or wxPoints.
     
-    input = [list_to_paired_list(i) if isinstance(i[0],(basestring,float,int)) else i for i in input]
+    input = [list_to_paired_list(i) if isinstance(i[0],(str,float,int)) else i for i in input]
             
     return input
     # if isinstance(input[0],pcbnew.wxPoint):
@@ -1930,7 +1930,7 @@ class commands:
         #print 'iterable: ',iterable
         for item in iterable[0]:
             a = iter(item)
-            valuelist.append(list(izip(a, a)))
+            valuelist.append(list(zip(a, a)))
         return valuelist
     pairwise.nargs = 1
     pairwise.category = 'Conversion'
@@ -2116,7 +2116,7 @@ class commands:
         
         
         for item in arglist[0][0]:
-            print "item:",item
+            print ("item:",item)
             output(arglist[0][1].format(*item))
             
     def fprintf(self, *arglist):
@@ -2174,7 +2174,7 @@ class commands:
             
         return map(lambda x: 
             getattr(x[0],c[2])(*(x[1])), 
-            izip(c[0], cycle(args))
+            zip(c[0], cycle(args))
             )
 
 ################## END OF COMMANDS CLASS ###########################
@@ -2182,10 +2182,11 @@ class commands:
     #modules copy GetReference call .*EF.* regex isnotnone filter Reference call false SetVisible callargs
     #modules *.EF.* regexref refobj clearvisible
     #'help': Command(0,lambda c: HELPMAIN(),'Help', "Shows general help"),
-    
+
+
 commands.classinstance = commands()
-for c in filter(lambda x: hasattr(getattr(commands,x), '__call__'),dir(commands)):
-    f = getattr(commands.classinstance,c)
+for c in filter(lambda x: not x.startswith('__') and hasattr(getattr(commands, x), '__call__'), dir(commands)):
+    f = getattr(commands.classinstance, c)
     if hasattr(f,'category'):
         _dictionary ['command'][c.lower()] = Command(f.nargs,f,f.category,f.__doc__)
     else:
@@ -2245,7 +2246,7 @@ def ROTATEPOINTS(points,center,angle):
         # newp = [rotate_point(p,c,float(angle)) for p in ps ]
     newps = []
     # output( 'cpsa: ',center,points, angle)
-    for ps,c,a in izip(points, cycle(center),cycle(angle)):
+    for ps,c,a in zip(points, cycle(center),cycle(angle)):
         newps.append([rotate_point(p,c,float(a)) for p in ps])
 
     # output( 'c2:',center, points)
@@ -2400,7 +2401,7 @@ def EXPLAIN(commandstring,category=None):
                 #output( '\n',dictname,'Dictionary')
                 if command in _dictionary[dictname]:
                     found = _dictionary[dictname][command]
-                    if isinstance(found,basestring):
+                    if isinstance(found,str):
                         found = found.split()
                         output( ': %s %s ;'%(command,' '.join(found)))
                         found.reverse()
@@ -2428,7 +2429,7 @@ def print_command_detail(command):
             break
     if not v:
         return False
-    # if isinstance(command,basestring):
+    # if isinstance(command,str):
         # return False
     output(('%s (Category: %s)'%(command,v.category)))
     output(('\t%s'%'\n'.join(['\n\t'.join(wrap(block, width=60)) for block in v.helptext.splitlines()])))
@@ -2522,7 +2523,7 @@ def HELP(textlist,category=None,exact=False):
     
     # allow detail input to be a list of comma separated commands
     
-    if isinstance(textlist,basestring):
+    if isinstance(textlist,str):
         textlist = [textlist]
     for text in textlist:
         textspace = text.split()
@@ -2620,17 +2621,17 @@ _command_dictionary.update({
     'index.': Command(2, lambda c: map(lambda x: x[int(c[1])],c[0]), 'Conversion',
         '[LISTOFLISTS INDEX] return a list made up of the INDEX item of each list in LISTOFLISTS'),
     'index': Command(2,
-                       lambda c: c[0][int(c[1])] if isinstance(c[1],basestring) \
+                       lambda c: c[0][int(c[1])] if isinstance(c[1],str) \
                        and c[1].find(',') == -1 else map(lambda x: x[0][int(x[1])],
-                       izip(c[0], cycle(c[1].split(','))
-                       if isinstance(c[1],basestring) else c[1]
+                       zip(c[0], cycle(c[1].split(','))
+                       if isinstance(c[1],str) else c[1]
                        )),
                        
                        #if hasattr(c[0],'__iter__') else [c[1]]),
                        
                        # lambda c: map(lambda x: x[0][x[1]],
                        # c[0].split(',')
-                       # if isinstance(c[0],basestring) else c[0]
+                       # if isinstance(c[0],str) else c[0]
                        # if hasattr(c[0],'__iter__') else [c[0]]),
                        'Programming',
         '[LIST INDEX] Select an item in the list of objects based on numeric index. '
@@ -2675,7 +2676,7 @@ _command_dictionary.update({
         '[LIST VALUE] Create a LIST of True/False values corresponding to whether the values in LIST equal to None (for use prior to FILTER)'),
     'isnotnone': Command(1,lambda c: map(lambda x: x is not None,c[0]),'Comparison',
         '[LIST VALUE] Create a LIST of True/False values corresponding to whether the values in LIST is not  None (for use prior to FILTER)'),
-#x=lambda c: map(lambda x: float(x),c.split(',')) if isinstance(c,basestring) else map(lambda x: float(x),c)
+#x=lambda c: map(lambda x: float(x),c.split(',')) if isinstance(c,str) else map(lambda x: float(x),c)
     'undock': Command(0,lambda c: UNDOCK(*c),'Interface',
         'Undock the window.'),
     'spush': Command(2,lambda c: _user_stacks[c[1]].append(c[0]),'Programming',
@@ -2705,7 +2706,7 @@ _command_dictionary.update({
                 lambda c: 
                 map(lambda x: 
                         x[0](*(x[1])), 
-                        izip(c[0], cycle(c[1]))
+                        zip(c[0], cycle(c[1]))
                    )
                 ,'Call',
         '[FUNCTIONLIST ARGLISTOFLISTS] Execute each python function in the'
@@ -2732,7 +2733,7 @@ _command_dictionary.update({
                 # lambda c: 
                 # map(lambda x: 
                         # getattr(x[0],c[2])(*(x[1])), 
-                        # izip(c[0], cycle(c[1]))
+                        # zip(c[0], cycle(c[1]))
                    # )
                 # ,'Call',
                 # #        zip(c[0],c[1][0:len(c[0])])
@@ -2756,10 +2757,10 @@ _command_dictionary.update({
     # # Outline the pads. Might be a problem with "bounding box" being orthogonal when pad is rotated.
     # r('clear pads copy GetBoundingBox call corners swap copy GetCenter call swap GetOrientationDegrees call rotatepoints drawpoly')
     '+.': Command(2,lambda c:
-            [float(a)+float(b) for a,b in izip(c[0], cycle(c[1]))],'Numeric',
+            [float(a)+float(b) for a,b in zip(c[0], cycle(c[1]))],'Numeric',
         '[LIST1 LIST2] Return the the floating point LIST1 + LIST2 member by member.'),
     '*.': Command(2,lambda c:
-            [float(a)*float(b) for a,b in izip(c[0], cycle(c[1]))],'Numeric',
+            [float(a)*float(b) for a,b in zip(c[0], cycle(c[1]))],'Numeric',
         '[LIST1 LIST2] Return the the floating point LIST1 * LIST2 member by member.'),
     '+': Command(2,lambda c:
             float(c[0])+float(c[1]),'Numeric',
@@ -2788,35 +2789,35 @@ _command_dictionary.update({
     # 'float': Command(1,
                        # lambda c: map(lambda x: float(x),
                        # c[0].split(',')
-                       # if isinstance(c[0],basestring) else c[0]
+                       # if isinstance(c[0],str) else c[0]
                        # if hasattr(c[0],'__iter__') else [c[0]]),
     'float': Command(1,
-                       lambda c: floatnoerror(c[0]) if isinstance(c[0],basestring) \
+                       lambda c: floatnoerror(c[0]) if isinstance(c[0],str) \
                        and c[0].find(',') == -1 else map(lambda x: floatnoerror(x),
                        c[0].split(',')
-                       if isinstance(c[0],basestring) else c[0]
+                       if isinstance(c[0],str) else c[0]
                        if hasattr(c[0],'__iter__') else [c[0]]),
                        'Conversion',
         '[OBJECT] Return OBJECT as a floating point value or list. OBJECT can '
         'be a string, a comma separated list of values, a list of strings, or '
         'list of numbers.', ),
     'bool': Command(1,
-    # if basestring and has ','
-                       lambda c: bool(c[0]) if isinstance(c[0],basestring) \
+    # if str and has ','
+                       lambda c: bool(c[0]) if isinstance(c[0],str) \
                        and c[0].find(',') == -1 else map(lambda x: bool(x),
                        c[0].split(',')
-                       if isinstance(c[0],basestring) else c[0]
+                       if isinstance(c[0],str) else c[0]
                        if hasattr(c[0],'__iter__') else [c[0]]),
                        'Conversion',
         '[OBJECT] Return OBJECT as a boolean value or list. OBJECT can '
         'be a string, a comma separated list of values, a list of strings, or '
         'list of values.', ),
     'int': Command(1,
-    # if basestring and has ','
-                       lambda c: intnoerror(c[0]) if isinstance(c[0],basestring) \
+    # if str and has ','
+                       lambda c: intnoerror(c[0]) if isinstance(c[0],str) \
                        and c[0].find(',') == -1 else map(lambda x: intnoerror(x),
                        c[0].split(',')
-                       if isinstance(c[0],basestring) else c[0]
+                       if isinstance(c[0],str) else c[0]
                        if hasattr(c[0],'__iter__') else [c[0]]),
                        'Conversion',
         '[OBJECT] Return OBJECT as a floating point value or list. OBJECT can '
@@ -2828,10 +2829,10 @@ _command_dictionary.update({
         '[KEYS VALUES] Create a dictionary from KEYS and VALUES lists.'),
     #'mm': Command(1,lambda c: float(c[0])*pcbnew.IU_PER_MM,'Conversion'),
     'mm': Command(1,
-                       lambda c: multiplynoerror(c[0],pcbnew.IU_PER_MM) if isinstance(c[0],basestring) \
+                       lambda c: multiplynoerror(c[0],pcbnew.IU_PER_MM) if isinstance(c[0],str) \
                        and c[0].find(',') == -1 else map(lambda x: multiplynoerror(x,pcbnew.IU_PER_MM),
                        c[0].split(',')
-                       if isinstance(c[0],basestring) else c[0]
+                       if isinstance(c[0],str) else c[0]
                        if hasattr(c[0],'__iter__') else [c[0]]),
                        'Conversion',
         '[OBJECT] Return OBJECT as a floating point value or list converted '
@@ -2839,10 +2840,10 @@ _command_dictionary.update({
         'be a string, a comma separated list of values, a list of strings, or '
         'list of numbers.'),
     'mil': Command(1,
-                       lambda c: multiplynoerror(c[0],pcbnew.IU_PER_MILS) if isinstance(c[0],basestring) \
+                       lambda c: multiplynoerror(c[0],pcbnew.IU_PER_MILS) if isinstance(c[0],str) \
                        and c[0].find(',') == -1 else map(lambda x: multiplynoerror(x,pcbnew.IU_PER_MILS),
                        c[0].split(',')
-                       if isinstance(c[0],basestring) else c[0]
+                       if isinstance(c[0],str) else c[0]
                        if hasattr(c[0],'__iter__') else [c[0]]),
                        'Conversion',
         '[OBJECT] Return OBJECT as a floating point value or list converted '
@@ -2850,10 +2851,10 @@ _command_dictionary.update({
         'be a string, a comma separated list of values, a list of strings, or '
         'list of numbers.'),
     'mils': Command(1,
-                       lambda c: multiplynoerror(c[0],pcbnew.IU_PER_MILS) if isinstance(c[0],basestring) \
+                       lambda c: multiplynoerror(c[0],pcbnew.IU_PER_MILS) if isinstance(c[0],str) \
                        and c[0].find(',') == -1 else map(lambda x: multiplynoerror(x,pcbnew.IU_PER_MILS),
                        c[0].split(',')
-                       if isinstance(c[0],basestring) else c[0]
+                       if isinstance(c[0], str) else c[0]
                        if hasattr(c[0],'__iter__') else [c[0]]),
                        'Conversion',
         '[OBJECT] Return OBJECT as a floating point value or list converted '
@@ -3033,7 +3034,7 @@ _user_stacks['drawparams'] = {
                                 'w':1*pcbnew.IU_PER_MM,
                                 'h':1*pcbnew.IU_PER_MM,
                                 'l':pcbnew.Dwgs_User, 
-                                'zt':pcbnew.CPolyLine.NO_HATCH,
+                                'zt':pcbnew.ZONE_CONTAINER.NO_HATCH,
                                 'zp':0
                              }
                              
@@ -3182,4 +3183,4 @@ def pad_to_drawsegment(pad):
 # plugin = aplugin()
 # aplugin.register(plugin)
 # plugin.Run()
-
+# 
